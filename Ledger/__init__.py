@@ -93,6 +93,7 @@ class Ledger:
         self.connection.execute(sql)
         self.connection.commit()
 
+
         # update the debit account balance
         sql = text(f'SELECT balance FROM balances WHERE account_id = {debit_account_id};')
         logging.debug(sql)
@@ -105,5 +106,26 @@ class Ledger:
         self.connection.execute(sql)
         self.connection.commit()
 
-        # FIXME:
-        # you need to update the credit account balance as well
+        # update the credit account balance
+        sql = text(f'SELECT balance FROM balances WHERE account_id = {credit_account_id};')
+        logging.debug(sql)
+        results = self.connection.execute(sql)
+        credit_account_balance = results.first()[0]
+
+        credit_new_balance = credit_account_balance + amount
+        sql = text(f'UPDATE balances SET balance={credit_new_balance} WHERE account_id = {credit_account_id};')
+        logging.debug(sql)
+        self.connection.execute(sql)
+        self.connection.commit()
+
+
+
+
+
+
+
+
+
+
+
+
