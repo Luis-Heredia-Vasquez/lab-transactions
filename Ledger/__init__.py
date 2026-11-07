@@ -73,6 +73,8 @@ class Ledger:
         self.connection.commit()
 
         with self.connection.begin():
+            sql = text('LOCK TABLE balances IN ACCESS EXCLUSIVE MODE;')
+            self.connection.execute(sql)
 
             # insert the transaction
             sql = text('''
