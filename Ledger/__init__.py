@@ -3,11 +3,23 @@ from sqlalchemy.sql import text
 import os
 import logging
 logging.basicConfig(
-    level=logging.DEBUG,
+    level=logging.WARNING,
     format=f'%(asctime)s.%(msecs)03d - {os.getpid()} - %(message)s',
     datefmt='%Y-%m-%d %H:%M:%S',
 )
 
+
+
+def retry_on_deadlock(func):
+    def wrapper(self, *args, **kwargs):
+        while True:
+            try:
+                return func(self, *args, **kwargs)
+            except sqlalchemy.exc.OperationalError as error:
+                if "deadlock detected" not in str(error):
+                    raise
+                continue
+    return wrapper
 
 class Ledger:
     '''
@@ -63,6 +75,7 @@ class Ledger:
             self.connection.execute(sql)
 
 
+    @retry_on_deadlock
     def transfer_funds(
             self,
             debit_account_id,
@@ -73,8 +86,8 @@ class Ledger:
         self.connection.commit()
 
         with self.connection.begin():
-            sql = text('LOCK TABLE balances IN ACCESS EXCLUSIVE MODE;')
-            self.connection.execute(sql)
+            # sql = text('LOCK TABLE balances IN ACCESS EXCLUSIVE MODE;')
+            # self.connection.execute(sql)
 
             # insert the transaction
             sql = text('''
@@ -91,6 +104,11 @@ class Ledger:
             self.connection.execute(sql)
 
             # update the debit account balance
+            sql = text("SELECT balance FROM balances WHERE account_id = :debit_account_id FOR UPDATE;")
+            sql = sql.bindparams(debit_account_id=debit_account_id)
+            logging.debug(sql)
+            self.connection.execute(sql)
+
             sql = text('''
                 UPDATE balances
                 SET balance = balance - :amount
@@ -104,6 +122,11 @@ class Ledger:
             self.connection.execute(sql)
 
             # update the credit account balance
+            sql = text("SELECT balance FROM balances WHERE account_id = :credit_account_id FOR UPDATE;")
+            sql = sql.bindparams(credit_account_id=credit_account_id)
+            logging.debug(sql)
+            self.connection.execute(sql)
+
             sql = text('''
                 UPDATE balances
                 SET balance = balance + :amount
